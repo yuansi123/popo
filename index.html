@@ -10,6 +10,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="便便日記" />
 <meta name="theme-color" content="#FFF3E9" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
 
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -322,6 +325,34 @@
   .cal-cell .cell-num { font-size: 10px; color: var(--mut); }
   .cal-cell.has-record .cell-num { color: var(--brown); font-weight: 700; }
 
+  /* SHARE */
+  .share-card {
+    background: linear-gradient(135deg, #FFE3C8, #FFD4C2);
+    border-radius: 20px;
+    padding: 16px;
+    margin-top: 16px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.5s 0.22s ease both;
+  }
+  .share-title { font-size: 14px; font-weight: 800; color: var(--dark); }
+  .share-desc { font-size: 11px; color: var(--brown); margin-top: 4px; line-height: 1.6; }
+  .share-btn {
+    width: 100%;
+    margin-top: 12px;
+    background: var(--brown);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s;
+    letter-spacing: 0.03em;
+  }
+  .share-btn:active { transform: scale(0.97); }
+
   /* NOTIFY GUIDE */
   .notify-card {
     background: linear-gradient(135deg, #FFF8F0, #FFEFDC);
@@ -516,6 +547,13 @@
       <button class="cal-nav" onclick="changeMonth(1)">›</button>
     </div>
     <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <!-- SHARE -->
+  <div class="share-card">
+    <div class="share-title">💌 分享給男友</div>
+    <div class="share-desc">把你的便便日記變成一條連結傳給他，他點開就能看到，還能匯入到自己的日記裡～</div>
+    <button class="share-btn" onclick="shareToPartner()">💩 分享我的紀錄</button>
   </div>
 
   <!-- NOTIFY GUIDE -->
@@ -885,12 +923,79 @@
     s.style.display = s.style.display === "none" ? "block" : "none";
   }
 
+  // ── 分享 / 匯入（透過連結把資料傳給對方）──
+  // 支援中文的 base64 編解碼
+  function encodeData(obj) {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  }
+  function decodeData(str) {
+    return JSON.parse(decodeURIComponent(escape(atob(str))));
+  }
+
+  async function shareToPartner() {
+    const data = loadData();
+    if (Object.keys(data).length === 0) {
+      showToast("還沒有任何紀錄可以分享 😅");
+      return;
+    }
+    const payload = encodeURIComponent(encodeData(data));
+    const url = location.origin + location.pathname + "#import=" + payload;
+    const shareData = {
+      title: "便便日記 💩",
+      text: "這是我的便便日記～點開連結就能看到，還能匯入喔 💩💕",
+      url: url,
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); }
+      catch (e) { /* 使用者取消，略過 */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("連結已複製，貼到 LINE 傳給男友吧 💌");
+      } catch {
+        prompt("複製這個連結傳給男友：", url);
+      }
+    }
+  }
+
+  // 開啟頁面時偵測連結中的匯入資料
+  function checkImport() {
+    const m = location.hash.match(/#import=(.+)/);
+    if (!m) return;
+    let incoming;
+    try { incoming = decodeData(decodeURIComponent(m[1])); }
+    catch (e) { return; }
+    // 清掉網址上的 hash，避免重整時重複匯入
+    history.replaceState(null, "", location.pathname + location.search);
+
+    const dayCount = Object.keys(incoming).length;
+    if (!dayCount) return;
+    if (!confirm("收到一份便便日記（共 " + dayCount + " 天的紀錄）\n要匯入合併到你的日記嗎？")) return;
+
+    const data = loadData();
+    let added = 0;
+    for (const k in incoming) {
+      if (!data[k]) data[k] = [];
+      const existingTs = new Set(data[k].map(r => r.ts));
+      for (const r of incoming[k]) {
+        if (!TYPE_INFO[r.type]) continue;        // 過濾無效類型
+        if (!existingTs.has(r.ts)) { data[k].push(r); existingTs.add(r.ts); added++; }
+      }
+      data[k].sort((a, b) => a.ts - b.ts);
+      if (!data[k].length) delete data[k];
+    }
+    saveData(data);
+    showToast("已匯入 " + added + " 筆紀錄 💕");
+    render();
+  }
+
   // ── Init ──
   try {
     const now = new Date();
     viewYear = now.getFullYear();
     viewMonth = now.getMonth();
     render();
+    checkImport();
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">載入錯誤：' + e.message + '</div>';
   }
