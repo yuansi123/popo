@@ -795,6 +795,29 @@
     try { localStorage.setItem("periodData", JSON.stringify(p)); } catch {}
   }
 
+  // 手動週期長度設定（記錄不足兩次經期時用來預測）
+  let memCycleLen = 28;
+  function loadCycleLen() {
+    if (!storageOK) return memCycleLen;
+    try { const v = parseInt(localStorage.getItem("cycleLen"), 10); return (v >= 21 && v <= 40) ? v : 28; }
+    catch { return memCycleLen; }
+  }
+  function saveCycleLen(n) {
+    memCycleLen = n;
+    if (!storageOK) return;
+    try { localStorage.setItem("cycleLen", String(n)); } catch {}
+  }
+  function editCycleLen() {
+    const cur = loadCycleLen();
+    const input = prompt("請輸入你的平均月經週期長度（天數，21~40，例如 28）：", String(cur));
+    if (input === null) return;
+    const n = parseInt(input, 10);
+    if (isNaN(n) || n < 21 || n > 40) { showToast("請輸入 21~40 之間的天數 🙏"); return; }
+    saveCycleLen(n);
+    render();
+    showToast("已設定週期長度為 " + n + " 天");
+  }
+
   // 設定/取消某天月經（flow 傳 null 代表取消）
   function setPeriod(key, flow) {
     const p = loadPeriod();
@@ -999,28 +1022,42 @@
         </div>`;
     }
 
-    // 統計：距離上次、平均週期、預計下次
+    // 統計：距離上次、週期長度、預計下次
     const stats = document.getElementById("periodStats");
-    const starts = periodStarts(p);
+    const starts = periodStarts(p).filter(s => s <= todayKey);
+    const cycleLen = loadCycleLen();
+    const editBtn = `<button class="period-cancel" onclick="editCycleLen()">✏️ 修改週期長度</button>`;
+
     if (!starts.length) {
-      stats.innerHTML = "還沒有月經紀錄。每次經期第一天記錄一下，就能幫你算週期囉。";
+      stats.innerHTML =
+        "還沒有月經紀錄。記錄每次經期第一天，就能預估下次日期。<br>" +
+        "目前週期長度設定：<b>" + cycleLen + " 天</b> " + editBtn;
       return;
     }
+
     const lastStart = starts[starts.length - 1];
     const sinceDays = daysBetweenKeys(lastStart, todayKey);
-    let line = "上次月經開始：<b>" + (sinceDays <= 0 ? "今天" : sinceDays + " 天前") + "</b>（" + lastStart.slice(5).replace("-","/") + "）";
 
+    // 兩次以上經期 → 自動算平均；否則用手動設定的週期長度
+    let effCycle, cycleLabel, showEdit;
     if (starts.length >= 2) {
       let sum = 0;
       for (let i = 1; i < starts.length; i++) sum += daysBetweenKeys(starts[i-1], starts[i]);
-      const avg = Math.round(sum / (starts.length - 1));
-      // 預計下次 = 上次開始 + 平均週期
-      const [ly,lm,ld] = lastStart.split("-").map(Number);
-      const next = new Date(ly, lm-1, ld); next.setDate(next.getDate() + avg);
-      line += "<br>平均週期：<b>約 " + avg + " 天</b> ・ 預計下次：<b>" + (next.getMonth()+1) + "/" + next.getDate() + "</b>";
+      effCycle = Math.round(sum / (starts.length - 1));
+      cycleLabel = "平均週期：<b>約 " + effCycle + " 天</b>（依紀錄自動計算）";
+      showEdit = false;
     } else {
-      line += "<br>再記錄一次經期，就能估算你的平均週期。";
+      effCycle = cycleLen;
+      cycleLabel = "週期長度：<b>" + cycleLen + " 天</b>";
+      showEdit = true;
     }
+
+    const [ly,lm,ld] = lastStart.split("-").map(Number);
+    const next = new Date(ly, lm-1, ld); next.setDate(next.getDate() + effCycle);
+
+    let line = "上次月經開始：<b>" + (sinceDays <= 0 ? "今天" : sinceDays + " 天前") + "</b>（" + lastStart.slice(5).replace("-","/") + "）";
+    line += "<br>" + cycleLabel + " ・ 預計下次：<b>" + (next.getMonth()+1) + "/" + next.getDate() + "</b>";
+    if (showEdit) line += "<br>" + editBtn;
     stats.innerHTML = line;
   }
 
@@ -1211,12 +1248,14 @@
     if (!starts.length) return null;
     const lastStart = starts[starts.length - 1];
 
-    // 平均週期（不足兩次就用 28 天估）
-    let avgCycle = 28;
+    // 平均週期：兩次以上自動算，否則用手動設定的週期長度
+    let avgCycle;
     if (allStarts.length >= 2) {
       let sum = 0;
       for (let i = 1; i < allStarts.length; i++) sum += daysBetweenKeys(allStarts[i-1], allStarts[i]);
       avgCycle = Math.round(sum / (allStarts.length - 1));
+    } else {
+      avgCycle = loadCycleLen();
     }
     if (avgCycle < 21 || avgCycle > 40) avgCycle = 28;   // 防呆
 
@@ -1334,7 +1373,7 @@
       showToast("還沒有任何紀錄可以備份 😅");
       return;
     }
-    const payload = { _type: "poopDiary", _v: 2, poop: poop, period: period };
+    const payload = { _type: "poopDiary", _v: 2, poop: poop, period: period, settings: { cycleLen: loadCycleLen() } };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1411,6 +1450,12 @@
         }
       }
       savePeriod(period);
+
+      // 週期長度設定
+      if (incoming.settings && typeof incoming.settings.cycleLen === "number" &&
+          incoming.settings.cycleLen >= 21 && incoming.settings.cycleLen <= 40) {
+        saveCycleLen(incoming.settings.cycleLen);
+      }
 
       render();
       showToast("已還原 " + added + " 筆便便、" + pAdded + " 天月經 💕");
