@@ -552,8 +552,8 @@
   <!-- SHARE -->
   <div class="share-card">
     <div class="share-title">💌 分享給男友</div>
-    <div class="share-desc">把你的便便日記變成一條連結傳給他，他點開就能看到，還能匯入到自己的日記裡～</div>
-    <button class="share-btn" onclick="shareToPartner()">💩 分享我的紀錄</button>
+    <div class="share-desc">產生一段白話摘要（距離上次大便幾天、最近兩週是順暢還是便秘），直接貼到 LINE 傳給他～</div>
+    <button class="share-btn" onclick="shareToPartner()">💩 產生摘要並分享</button>
   </div>
 
   <!-- NOTIFY GUIDE -->
@@ -923,70 +923,81 @@
     s.style.display = s.style.display === "none" ? "block" : "none";
   }
 
-  // ── 分享 / 匯入（透過連結把資料傳給對方）──
-  // 支援中文的 base64 編解碼
-  function encodeData(obj) {
-    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  // ── 分享給男友：產生白話文字摘要 ──
+  function daysBetweenKeys(aKey, bKey) {   // bKey - aKey，回傳相差天數
+    const [ay,am,ad] = aKey.split("-").map(Number);
+    const [by,bm,bd] = bKey.split("-").map(Number);
+    return Math.round((new Date(by,bm-1,bd) - new Date(ay,am-1,ad)) / 86400000);
   }
-  function decodeData(str) {
-    return JSON.parse(decodeURIComponent(escape(atob(str))));
+
+  function buildSummaryText() {
+    const data = loadData();
+    const today = new Date();
+    const todayKey = dateKey(today);
+
+    // 距離上次大便（只看今天(含)以前，type 不是 none 的紀錄）
+    let lastPoopKey = null;
+    for (const k in data) {
+      if (k <= todayKey && data[k].some(r => r.type !== "none")) {
+        if (!lastPoopKey || k > lastPoopKey) lastPoopKey = k;   // YYYY-MM-DD 補零後字串比大小有效
+      }
+    }
+    let sinceLine;
+    if (!lastPoopKey) {
+      sinceLine = "還沒有任何大便紀錄";
+    } else {
+      const diff = daysBetweenKeys(lastPoopKey, todayKey);
+      sinceLine = diff <= 0 ? "今天已經大便了，順暢 ✅" : "距離上次大便：已經 " + diff + " 天了";
+    }
+
+    // 最近兩週（14 天）統計
+    let good = 0, constip = 0, loose = 0;
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      for (const r of (data[dateKey(d)] || [])) {
+        if (r.type === "smooth" || r.type === "normal") good++;
+        else if (r.type === "hard1" || r.type === "hard2" || r.type === "hard3") constip++;
+        else if (r.type === "loose") loose++;
+      }
+    }
+    const total = good + constip + loose;
+
+    let statLines;
+    if (total === 0) {
+      statLines = "・最近兩週都沒有大便紀錄，要多注意身體喔 🥺";
+    } else {
+      const avg = (14 / total).toFixed(1);
+      let verdict;
+      if (constip / total >= 0.5) verdict = "偏便秘，建議多喝水、多吃蔬果纖維 🥦";
+      else if (loose / total >= 0.4) verdict = "容易拉肚子，注意飲食和保暖 🍵";
+      else verdict = "大致順暢，繼續保持～ 💪";
+      statLines =
+        "・大便 " + total + " 次（平均 " + avg + " 天一次）\n" +
+        "・順暢/普通 " + good + " 次、便秘 " + constip + " 次、拉肚子 " + loose + " 次\n" +
+        "・狀態：" + verdict;
+    }
+
+    const wd = ["日","一","二","三","四","五","六"][today.getDay()];
+    return "💩 我的便便日記回報 💩\n" +
+      "📅 " + (today.getMonth()+1) + "/" + today.getDate() + "（" + wd + "）\n\n" +
+      "⏰ " + sinceLine + "\n" +
+      "🔥 連續紀錄：" + calcStreak(data) + " 天\n\n" +
+      "📊 最近兩週\n" + statLines;
   }
 
   async function shareToPartner() {
-    const data = loadData();
-    if (Object.keys(data).length === 0) {
-      showToast("還沒有任何紀錄可以分享 😅");
-      return;
-    }
-    const payload = encodeURIComponent(encodeData(data));
-    const url = location.origin + location.pathname + "#import=" + payload;
-    const shareData = {
-      title: "便便日記 💩",
-      text: "這是我的便便日記～點開連結就能看到，還能匯入喔 💩💕",
-      url: url,
-    };
+    const text = buildSummaryText();
     if (navigator.share) {
-      try { await navigator.share(shareData); }
+      try { await navigator.share({ title: "便便日記 💩", text }); }
       catch (e) { /* 使用者取消，略過 */ }
     } else {
       try {
-        await navigator.clipboard.writeText(url);
-        showToast("連結已複製，貼到 LINE 傳給男友吧 💌");
+        await navigator.clipboard.writeText(text);
+        showToast("摘要已複製，貼到 LINE 傳給男友吧 💌");
       } catch {
-        prompt("複製這個連結傳給男友：", url);
+        prompt("複製這段傳給男友：", text);
       }
     }
-  }
-
-  // 開啟頁面時偵測連結中的匯入資料
-  function checkImport() {
-    const m = location.hash.match(/#import=(.+)/);
-    if (!m) return;
-    let incoming;
-    try { incoming = decodeData(decodeURIComponent(m[1])); }
-    catch (e) { return; }
-    // 清掉網址上的 hash，避免重整時重複匯入
-    history.replaceState(null, "", location.pathname + location.search);
-
-    const dayCount = Object.keys(incoming).length;
-    if (!dayCount) return;
-    if (!confirm("收到一份便便日記（共 " + dayCount + " 天的紀錄）\n要匯入合併到你的日記嗎？")) return;
-
-    const data = loadData();
-    let added = 0;
-    for (const k in incoming) {
-      if (!data[k]) data[k] = [];
-      const existingTs = new Set(data[k].map(r => r.ts));
-      for (const r of incoming[k]) {
-        if (!TYPE_INFO[r.type]) continue;        // 過濾無效類型
-        if (!existingTs.has(r.ts)) { data[k].push(r); existingTs.add(r.ts); added++; }
-      }
-      data[k].sort((a, b) => a.ts - b.ts);
-      if (!data[k].length) delete data[k];
-    }
-    saveData(data);
-    showToast("已匯入 " + added + " 筆紀錄 💕");
-    render();
   }
 
   // ── Init ──
@@ -995,7 +1006,6 @@
     viewYear = now.getFullYear();
     viewMonth = now.getMonth();
     render();
-    checkImport();
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">載入錯誤：' + e.message + '</div>';
   }
