@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>便便日記 💩</title>
+
+<!-- PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="便便日記" />
+<meta name="theme-color" content="#FFF3E9" />
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #FFF3E9;
+    --card: #FFFFFF;
+    --brown: #9C6B4A;
+    --dark: #6B4632;
+    --peach: #FFB88A;
+    --pink: #FFD4C2;
+    --cream: #FFE3C8;
+    --green: #A8D5A2;
+    --yellow: #FFE08A;
+    --red: #FF9E9E;
+    --blue: #A8C8E8;
+    --mut: #C4A088;
+    --shadow: 0 6px 20px rgba(156,107,74,0.12);
+  }
+
+  html, body {
+    background: var(--bg);
+    font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+    color: var(--dark);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body { padding: 16px 16px 40px; }
+
+  .container { max-width: 460px; margin: 0 auto; }
+
+  @keyframes bounceIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.08); }
+    70% { transform: scale(0.95); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @keyframes pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes confetti {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(-80px) rotate(360deg); opacity: 0; }
+  }
+
+  /* HEADER */
+  header {
+    text-align: center;
+    padding: 24px 0 8px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .mascot {
+    font-size: 56px;
+    display: inline-block;
+    animation: float 3s ease-in-out infinite;
+    filter: drop-shadow(0 6px 12px rgba(156,107,74,0.25));
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--dark);
+    margin-top: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .subtitle { font-size: 12px; color: var(--mut); margin-top: 4px; }
+
+  /* STREAK */
+  .streak-bar {
+    display: flex;
+    gap: 10px;
+    margin: 18px 0;
+    animation: fadeUp 0.5s 0.1s ease both;
+  }
+
+  .streak-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 14px 10px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+
+  .streak-num {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--brown);
+  }
+
+  .streak-lbl { font-size: 10px; color: var(--mut); margin-top: 2px; letter-spacing: 0.05em; }
+
+  /* TODAY CARD */
+  .today-card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 22px 18px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    animation: fadeUp 0.5s 0.15s ease both;
+  }
+
+  .today-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--brown);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .today-date { font-size: 11px; color: var(--mut); font-weight: 500; }
+
+  /* BIG RECORD BUTTON */
+  .record-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #FFD4A8, #FFB88A);
+    border: none;
+    border-radius: 20px;
+    padding: 20px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--dark);
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(255,184,138,0.4);
+    transition: transform 0.15s;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+  }
+
+  .record-btn:active { transform: scale(0.96); }
+
+  .nopoop-btn {
+    width: 100%;
+    margin-top: 10px;
+    background: var(--bg);
+    border: 2px dashed var(--mut);
+    border-radius: 16px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--mut);
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s;
+  }
+
+  .nopoop-btn:active { transform: scale(0.97); }
+
+  /* TYPE PICKER */
+  .type-picker {
+    display: none;
+    margin-top: 16px;
+  }
+
+  .type-picker.show { display: block; animation: fadeUp 0.3s ease both; }
+
+  .type-label { font-size: 12px; color: var(--mut); margin-bottom: 10px; font-weight: 600; }
+
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .type-option {
+    background: var(--bg);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    padding: 12px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .type-option:active { transform: scale(0.92); }
+
+  .type-option.selected {
+    border-color: var(--peach);
+    background: #FFF8F0;
+    animation: pop 0.3s ease;
+  }
+
+  .type-emoji { font-size: 26px; display: block; }
+  .type-name { font-size: 10px; color: var(--dark); font-weight: 600; margin-top: 4px; display: block; }
+
+  .confirm-btn {
+    width: 100%;
+    margin-top: 14px;
+    background: var(--brown);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s, opacity 0.2s;
+  }
+
+  .confirm-btn:disabled { opacity: 0.4; }
+  .confirm-btn:active:not(:disabled) { transform: scale(0.97); }
+
+  /* TODAY RECORDS */
+  .today-records { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+  .record-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border-radius: 14px;
+    padding: 10px 14px;
+    animation: bounceIn 0.4s ease both;
+  }
+
+  .record-emoji { font-size: 22px; }
+  .record-info { flex: 1; }
+  .record-type { font-size: 13px; font-weight: 700; color: var(--dark); }
+  .record-time { font-size: 11px; color: var(--mut); }
+
+  .record-del {
+    background: none;
+    border: none;
+    color: var(--mut);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+
+  /* CALENDAR */
+  .calendar-card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 20px 16px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.5s 0.2s ease both;
+  }
+
+  .cal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .cal-title { font-size: 15px; font-weight: 800; color: var(--dark); }
+
+  .cal-nav {
+    background: var(--bg);
+    border: none;
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--brown);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .cal-day-name {
+    text-align: center;
+    font-size: 10px;
+    color: var(--mut);
+    font-weight: 700;
+    padding: 4px 0;
+  }
+
+  .cal-cell {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--dark);
+    position: relative;
+    cursor: default;
+  }
+
+  .cal-cell.has-record { background: var(--cream); }
+  .cal-cell.today { border: 2px solid var(--peach); font-weight: 800; }
+  .cal-cell .cell-emoji { font-size: 13px; line-height: 1; }
+  .cal-cell .cell-num { font-size: 10px; color: var(--mut); }
+  .cal-cell.has-record .cell-num { color: var(--brown); font-weight: 700; }
+
+  /* NOTIFY GUIDE */
+  .notify-card {
+    background: linear-gradient(135deg, #FFF8F0, #FFEFDC);
+    border-radius: 20px;
+    padding: 18px;
+    margin-top: 16px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.5s 0.25s ease both;
+  }
+
+  .notify-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--dark);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .notify-steps { font-size: 12px; color: var(--brown); line-height: 2; }
+  .notify-steps b { color: var(--dark); }
+
+  .toggle-guide {
+    background: none;
+    border: none;
+    color: var(--brown);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: underline;
+    padding: 0;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--dark);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    z-index: 999;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .confetti-piece {
+    position: fixed;
+    font-size: 20px;
+    pointer-events: none;
+    z-index: 998;
+    animation: confetti 1s ease-out forwards;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <span class="mascot">💩</span>
+    <h1>便便日記</h1>
+    <div class="subtitle">每天順暢，健康加分！</div>
+  </header>
+
+  <!-- STREAK -->
+  <div class="streak-bar">
+    <div class="streak-card">
+      <div class="streak-num" id="streakDays">0</div>
+      <div class="streak-lbl">連續紀錄 🔥</div>
+    </div>
+    <div class="streak-card">
+      <div class="streak-num" id="monthCount">0</div>
+      <div class="streak-lbl">本月次數 📅</div>
+    </div>
+    <div class="streak-card">
+      <div class="streak-num" id="todayCount">0</div>
+      <div class="streak-lbl">今日次數 ✨</div>
+    </div>
+  </div>
+
+  <!-- TODAY -->
+  <div class="today-card">
+    <div class="today-title">
+      今天上廁所了嗎？
+      <span class="today-date" id="todayDate"></span>
+    </div>
+
+    <button class="record-btn" id="recordBtn" onclick="togglePicker()">💩 我大便了！</button>
+    <button class="nopoop-btn" id="nopoopBtn" onclick="recordNoPoop()">🚫 今天沒大便</button>
+
+    <div class="type-picker" id="typePicker">
+      <div class="type-label">今天的便便狀態如何？</div>
+      <div class="type-grid">
+        <button class="type-option" data-type="smooth" onclick="selectType(this)">
+          <span class="type-emoji">😄</span>
+          <span class="type-name">順暢</span>
+        </button>
+        <button class="type-option" data-type="normal" onclick="selectType(this)">
+          <span class="type-emoji">🙂</span>
+          <span class="type-name">普通</span>
+        </button>
+        <button class="type-option" data-type="loose" onclick="selectType(this)">
+          <span class="type-emoji">💦</span>
+          <span class="type-name">拉肚子</span>
+        </button>
+        <button class="type-option" data-type="hard1" onclick="selectType(this)">
+          <span class="type-emoji">😐</span>
+          <span class="type-name">輕微便秘</span>
+        </button>
+        <button class="type-option" data-type="hard2" onclick="selectType(this)">
+          <span class="type-emoji">😣</span>
+          <span class="type-name">中度便秘</span>
+        </button>
+        <button class="type-option" data-type="hard3" onclick="selectType(this)">
+          <span class="type-emoji">😖</span>
+          <span class="type-name">嚴重便秘</span>
+        </button>
+      </div>
+      <button class="confirm-btn" id="confirmBtn" onclick="saveRecord()" disabled>紀錄下來！</button>
+    </div>
+
+    <div class="today-records" id="todayRecords"></div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="calendar-card">
+    <div class="cal-header">
+      <button class="cal-nav" onclick="changeMonth(-1)">‹</button>
+      <div class="cal-title" id="calTitle"></div>
+      <button class="cal-nav" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <!-- NOTIFY GUIDE -->
+  <div class="notify-card">
+    <div class="notify-title">🔔 設定每天下午 1 點提醒（iPhone）</div>
+    <button class="toggle-guide" onclick="toggleGuide()">查看設定教學 ▾</button>
+    <div class="notify-steps" id="notifySteps" style="display:none; margin-top:10px;">
+      1. 打開內建的 <b>「捷徑」App</b> → 點下方 <b>「自動化」</b><br>
+      2. 點 <b>「＋」新增自動化</b> → 選 <b>「特定時間」</b><br>
+      3. 時間設 <b>下午 1:00</b>、每天重複 → <b>「立即執行」</b><br>
+      4. 動作選 <b>「開啟 App」</b>？不對——選 <b>「顯示通知」</b>，輸入「該記錄便便囉 💩」<br>
+      5. 或者動作選 <b>「打開 URL」</b>，貼上這個網站的網址，時間到直接打開！<br>
+      <br>
+      💡 把這個網頁用 Safari <b>「加入主畫面」</b>，就能像 App 一樣全螢幕使用！
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">紀錄成功！</div>
+
+<script>
+  const TYPE_INFO = {
+    smooth:  { emoji: "😄", name: "順暢" },
+    normal:  { emoji: "🙂", name: "普通" },
+    hard1:   { emoji: "😐", name: "輕微便秘" },
+    hard2:   { emoji: "😣", name: "中度便秘" },
+    hard3:   { emoji: "😖", name: "嚴重便秘" },
+    loose:   { emoji: "💦", name: "拉肚子" },
+    none:    { emoji: "🚫", name: "今天沒大便" },
+  };
+
+  let selectedType = null;
+  let viewYear, viewMonth;
+
+  // ── Storage（含記憶體備援，預覽環境也能用）──
+  let memStore = {};
+  let storageOK = true;
+  try { localStorage.setItem("__test__","1"); localStorage.removeItem("__test__"); }
+  catch { storageOK = false; }
+
+  function loadData() {
+    if (!storageOK) return memStore;
+    try { return JSON.parse(localStorage.getItem("poopData") || "{}"); }
+    catch { return memStore; }
+  }
+
+  function saveData(data) {
+    memStore = data;
+    if (!storageOK) return;
+    try { localStorage.setItem("poopData", JSON.stringify(data)); } catch {}
+  }
+
+  function dateKey(d) {
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  // ── UI ──
+  function togglePicker() {
+    const p = document.getElementById("typePicker");
+    p.classList.toggle("show");
+  }
+
+  function selectType(el) {
+    document.querySelectorAll(".type-option").forEach(o => o.classList.remove("selected"));
+    el.classList.add("selected");
+    selectedType = el.dataset.type;
+    document.getElementById("confirmBtn").disabled = false;
+  }
+
+  function saveRecord() {
+    if (!selectedType) return;
+    const data = loadData();
+    const key = dateKey(new Date());
+    if (!data[key]) data[key] = [];
+    const now = new Date();
+    data[key].push({
+      type: selectedType,
+      time: String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0"),
+      ts: Date.now(),
+    });
+    saveData(data);
+
+    // reset UI
+    selectedType = null;
+    document.querySelectorAll(".type-option").forEach(o => o.classList.remove("selected"));
+    document.getElementById("confirmBtn").disabled = true;
+    document.getElementById("typePicker").classList.remove("show");
+
+    showToast("紀錄成功！繼續保持 💪");
+    burstConfetti();
+    render();
+  }
+
+  function recordNoPoop() {
+    const data = loadData();
+    const key = dateKey(new Date());
+    // 「沒大便」一天只記一次，且會覆蓋提示
+    if (data[key] && data[key].some(r => r.type === "none")) {
+      showToast("今天已經記過沒大便囉 🚫");
+      return;
+    }
+    if (data[key] && data[key].length > 0) {
+      showToast("今天已經有大便紀錄囉 💩");
+      return;
+    }
+    const now = new Date();
+    data[key] = [{
+      type: "none",
+      time: String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0"),
+      ts: Date.now(),
+    }];
+    saveData(data);
+    showToast("記下來了，明天加油 💪");
+    render();
+  }
+
+  function deleteRecord(key, ts) {
+    const data = loadData();
+    if (data[key]) {
+      data[key] = data[key].filter(r => r.ts !== ts);
+      if (!data[key].length) delete data[key];
+      saveData(data);
+      render();
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  function burstConfetti() {
+    const emojis = ["💩","✨","🎉","💛","🌟"];
+    for (let i = 0; i < 8; i++) {
+      const piece = document.createElement("div");
+      piece.className = "confetti-piece";
+      piece.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+      piece.style.left = (30 + Math.random()*40) + "%";
+      piece.style.top = "40%";
+      piece.style.animationDelay = (Math.random()*0.3) + "s";
+      document.body.appendChild(piece);
+      setTimeout(() => piece.remove(), 1400);
+    }
+  }
+
+  // ── Stats ──
+  function calcStreak(data) {
+    let streak = 0;
+    const d = new Date();
+    // 如果今天還沒紀錄，從昨天開始算
+    if (!data[dateKey(d)]) d.setDate(d.getDate() - 1);
+    while (data[dateKey(d)]) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    }
+    return streak;
+  }
+
+  // ── Render ──
+  function render() {
+    const data = loadData();
+    const today = new Date();
+    const todayKey = dateKey(today);
+
+    // date display
+    document.getElementById("todayDate").textContent =
+      (today.getMonth()+1) + "/" + today.getDate() + " " + ["日","一","二","三","四","五","六"][today.getDay()];
+
+    // stats
+    document.getElementById("streakDays").textContent = calcStreak(data);
+    document.getElementById("todayCount").textContent = (data[todayKey] || []).filter(r => r.type !== "none").length;
+
+    let monthTotal = 0;
+    const mPrefix = today.getFullYear() + "-" + String(today.getMonth()+1).padStart(2,"0");
+    for (const k in data) {
+      if (k.startsWith(mPrefix)) monthTotal += data[k].filter(r => r.type !== "none").length;
+    }
+    document.getElementById("monthCount").textContent = monthTotal;
+
+    // today records
+    const list = document.getElementById("todayRecords");
+    const records = data[todayKey] || [];
+    list.innerHTML = records.map(r => `
+      <div class="record-item">
+        <span class="record-emoji">${TYPE_INFO[r.type].emoji}</span>
+        <div class="record-info">
+          <div class="record-type">${TYPE_INFO[r.type].name}</div>
+          <div class="record-time">${r.time}</div>
+        </div>
+        <button class="record-del" onclick="deleteRecord('${todayKey}', ${r.ts})">✕</button>
+      </div>
+    `).join("");
+
+    renderCalendar(data);
+  }
+
+  function renderCalendar(data) {
+    const grid = document.getElementById("calGrid");
+    const title = document.getElementById("calTitle");
+    title.textContent = viewYear + " 年 " + (viewMonth+1) + " 月";
+
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+    const todayKey = dateKey(new Date());
+
+    let html = ["日","一","二","三","四","五","六"].map(d => `<div class="cal-day-name">${d}</div>`).join("");
+
+    for (let i = 0; i < firstDay; i++) html += "<div></div>";
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = viewYear + "-" + String(viewMonth+1).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+      const recs = data[key];
+      const isToday = key === todayKey;
+      if (recs && recs.length) {
+        // 用當天最後一筆的表情
+        const lastType = recs[recs.length-1].type;
+        html += `<div class="cal-cell has-record ${isToday?'today':''}">
+          <span class="cell-emoji">${TYPE_INFO[lastType].emoji}</span>
+          <span class="cell-num">${d}</span>
+        </div>`;
+      } else {
+        html += `<div class="cal-cell ${isToday?'today':''}"><span class="cell-num">${d}</span></div>`;
+      }
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function changeMonth(delta) {
+    viewMonth += delta;
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    renderCalendar(loadData());
+  }
+
+  function toggleGuide() {
+    const s = document.getElementById("notifySteps");
+    s.style.display = s.style.display === "none" ? "block" : "none";
+  }
+
+  // ── Init ──
+  try {
+    const now = new Date();
+    viewYear = now.getFullYear();
+    viewMonth = now.getMonth();
+    render();
+  } catch (e) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">載入錯誤：' + e.message + '</div>';
+  }
+</script>
+</body>
+</html>
