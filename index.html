@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
 <title>便便日記 💩</title>
 
 <!-- PWA -->
@@ -918,7 +918,11 @@
   }
 
   function closeDayModal() {
-    document.getElementById("dayModal").classList.remove("show");
+    const modal = document.getElementById("dayModal");
+    modal.classList.remove("show");
+    modal.style.paddingBottom = "";
+    const sheet = modal.querySelector(".modal-sheet");
+    if (sheet) sheet.style.maxHeight = "";
     modalKey = null;
     modalSelectedType = null;
   }
@@ -1148,6 +1152,33 @@
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">載入錯誤：' + e.message + '</div>';
   }
+
+  // ── 彈窗鍵盤調整：手機鍵盤跳出時把底部彈窗往上推，避免蓋住按鈕 ──
+  function setupKeyboardAdjust() {
+    if (!window.visualViewport) return;
+    const vv = window.visualViewport;
+    const modal = document.getElementById("dayModal");
+    function adjust() {
+      const sheet = modal.querySelector(".modal-sheet");
+      if (!modal.classList.contains("show")) {
+        modal.style.paddingBottom = "";
+        if (sheet) sheet.style.maxHeight = "";
+        return;
+      }
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      modal.style.paddingBottom = kb ? kb + "px" : "";
+      if (sheet) sheet.style.maxHeight = kb ? (vv.height - 12) + "px" : "";
+    }
+    vv.addEventListener("resize", adjust);
+    vv.addEventListener("scroll", adjust);
+    // 點到備註欄時，確保「新增這筆紀錄」按鈕捲到看得到的位置
+    document.getElementById("modalNoteInput").addEventListener("focus", () => {
+      setTimeout(() => {
+        document.getElementById("modalConfirmBtn").scrollIntoView({ block: "nearest" });
+      }, 300);
+    });
+  }
+  setupKeyboardAdjust();
 
   // ── 註冊 Service Worker（離線可用 + 可安裝到主畫面）──
   if ("serviceWorker" in navigator) {
