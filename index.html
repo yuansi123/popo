@@ -353,6 +353,33 @@
   }
   .share-btn:active { transform: scale(0.97); }
 
+  /* BACKUP */
+  .backup-card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 16px;
+    margin-top: 16px;
+    box-shadow: var(--shadow);
+    animation: fadeUp 0.5s 0.24s ease both;
+  }
+  .backup-title { font-size: 14px; font-weight: 800; color: var(--dark); }
+  .backup-desc { font-size: 11px; color: var(--mut); margin-top: 4px; line-height: 1.6; }
+  .backup-row { display: flex; gap: 10px; margin-top: 12px; }
+  .backup-btn {
+    flex: 1;
+    background: var(--bg);
+    border: 2px solid var(--cream);
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--brown);
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s;
+  }
+  .backup-btn:active { transform: scale(0.96); }
+
   /* NOTIFY GUIDE */
   .notify-card {
     background: linear-gradient(135deg, #FFF8F0, #FFEFDC);
@@ -554,6 +581,17 @@
     <div class="share-title">💌 分享給男友</div>
     <div class="share-desc">產生一段白話摘要（距離上次大便幾天、最近兩週是順暢還是便秘），直接貼到 LINE 傳給他～</div>
     <button class="share-btn" onclick="shareToPartner()">💩 產生摘要並分享</button>
+  </div>
+
+  <!-- BACKUP -->
+  <div class="backup-card">
+    <div class="backup-title">💾 資料備份</div>
+    <div class="backup-desc">紀錄只存在這支手機，建議定期匯出存檔；換手機或不小心清掉資料時可以還原。</div>
+    <div class="backup-row">
+      <button class="backup-btn" onclick="exportBackup()">⬇️ 匯出備份</button>
+      <button class="backup-btn" onclick="triggerImport()">⬆️ 還原備份</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importBackup(event)" />
   </div>
 
   <!-- NOTIFY GUIDE -->
@@ -1000,6 +1038,69 @@
     }
   }
 
+  // ── 備份 / 還原（匯出成檔案，可換手機後還原）──
+  function exportBackup() {
+    const data = loadData();
+    if (Object.keys(data).length === 0) {
+      showToast("還沒有任何紀錄可以備份 😅");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "便便日記備份_" + dateKey(new Date()) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("已匯出備份檔 💾");
+  }
+
+  function triggerImport() {
+    document.getElementById("importFile").click();
+  }
+
+  function importBackup(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";   // 重設，讓同一個檔案能再次選取
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let incoming;
+      try { incoming = JSON.parse(reader.result); }
+      catch { showToast("檔案讀取失敗，格式不正確 😢"); return; }
+      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+        showToast("這不是有效的備份檔 😢");
+        return;
+      }
+      if (!confirm("要還原這個備份嗎？\n會與目前的紀錄合併（不會刪掉你現有的紀錄）")) return;
+
+      const data = loadData();
+      let added = 0;
+      for (const k in incoming) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !Array.isArray(incoming[k])) continue;
+        if (!data[k]) data[k] = [];
+        const existingTs = new Set(data[k].map(r => r.ts));
+        for (const r of incoming[k]) {
+          if (!r || !TYPE_INFO[r.type]) continue;          // 過濾無效資料
+          const ts = typeof r.ts === "number" ? r.ts : (Date.now() + Math.floor(Math.random() * 1e6));
+          if (!existingTs.has(ts)) {
+            data[k].push({ type: r.type, time: typeof r.time === "string" ? r.time : "", ts });
+            existingTs.add(ts);
+            added++;
+          }
+        }
+        data[k].sort((a, b) => a.ts - b.ts);
+        if (!data[k].length) delete data[k];
+      }
+      saveData(data);
+      render();
+      showToast("已還原 " + added + " 筆紀錄 💕");
+    };
+    reader.readAsText(file);
+  }
+
   // ── Init ──
   try {
     const now = new Date();
@@ -1008,6 +1109,13 @@
     render();
   } catch (e) {
     document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">載入錯誤：' + e.message + '</div>';
+  }
+
+  // ── 註冊 Service Worker（離線可用 + 可安裝到主畫面）──
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
   }
 </script>
 </body>
