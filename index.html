@@ -398,6 +398,68 @@
   }
   .backup-btn:active { transform: scale(0.96); }
 
+  /* PERIOD */
+  .period-card {
+    background: var(--card);
+    border-radius: 24px;
+    padding: 20px 18px;
+    box-shadow: var(--shadow);
+    margin-bottom: 16px;
+    animation: fadeUp 0.5s 0.18s ease both;
+  }
+  .period-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #C46A7E;
+    margin-bottom: 12px;
+  }
+  .period-today { font-size: 13px; color: var(--dark); }
+  .flow-label { font-size: 12px; color: var(--mut); margin-bottom: 10px; font-weight: 600; }
+  .flow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .flow-option {
+    background: #FFF0F3;
+    border: 2px solid transparent;
+    border-radius: 16px;
+    padding: 12px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.15s;
+    font-family: inherit;
+  }
+  .flow-option:active { transform: scale(0.92); }
+  .flow-option.selected { border-color: #F0A6B8; background: #FFE5EB; }
+  .flow-emoji { font-size: 24px; display: block; }
+  .flow-name { font-size: 11px; color: var(--dark); font-weight: 600; margin-top: 4px; display: block; }
+  .period-on {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #FFE5EB; border-radius: 14px; padding: 12px 14px;
+  }
+  .period-on-text { font-size: 14px; font-weight: 700; color: #C46A7E; }
+  .period-cancel {
+    background: none; border: none; color: #C46A7E; font-size: 12px;
+    font-weight: 700; cursor: pointer; font-family: inherit; text-decoration: underline;
+  }
+  .period-stats {
+    font-size: 11px; color: var(--mut); margin-top: 12px; line-height: 1.7;
+    border-top: 1px dashed var(--cream); padding-top: 10px;
+  }
+  .period-stats b { color: #C46A7E; }
+
+  .cell-period {
+    position: absolute;
+    top: 1px; right: 3px;
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  /* MODAL PERIOD */
+  .modal-period {
+    border-top: 1px dashed var(--cream);
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+  .modal-period .flow-label { margin-bottom: 8px; }
+
   /* NOTIFY GUIDE */
   .notify-card {
     background: linear-gradient(135deg, #FFF8F0, #FFEFDC);
@@ -585,6 +647,13 @@
     <div class="today-records" id="todayRecords"></div>
   </div>
 
+  <!-- PERIOD -->
+  <div class="period-card">
+    <div class="period-title">🩸 月經紀錄</div>
+    <div class="period-today" id="periodToday"></div>
+    <div class="period-stats" id="periodStats"></div>
+  </div>
+
   <!-- CALENDAR -->
   <div class="calendar-card">
     <div class="cal-header">
@@ -666,6 +735,8 @@
     </div>
 
     <div class="today-records" id="modalRecords"></div>
+
+    <div class="modal-period" id="modalPeriod"></div>
   </div>
 </div>
 
@@ -682,6 +753,12 @@
     none:    { emoji: "🚫", name: "今天沒大便" },
   };
 
+  const FLOW_INFO = {
+    light:  { emoji: "💧", name: "少量" },
+    medium: { emoji: "🩸", name: "中量" },
+    heavy:  { emoji: "🔴", name: "大量" },
+  };
+
   let selectedType = null;
   let viewYear, viewMonth;
   let modalKey = null;
@@ -689,6 +766,7 @@
 
   // ── Storage（含記憶體備援，預覽環境也能用）──
   let memStore = {};
+  let memPeriod = {};
   let storageOK = true;
   try { localStorage.setItem("__test__","1"); localStorage.removeItem("__test__"); }
   catch { storageOK = false; }
@@ -703,6 +781,27 @@
     memStore = data;
     if (!storageOK) return;
     try { localStorage.setItem("poopData", JSON.stringify(data)); } catch {}
+  }
+
+  function loadPeriod() {
+    if (!storageOK) return memPeriod;
+    try { return JSON.parse(localStorage.getItem("periodData") || "{}"); }
+    catch { return memPeriod; }
+  }
+
+  function savePeriod(p) {
+    memPeriod = p;
+    if (!storageOK) return;
+    try { localStorage.setItem("periodData", JSON.stringify(p)); } catch {}
+  }
+
+  // 設定/取消某天月經（flow 傳 null 代表取消）
+  function setPeriod(key, flow) {
+    const p = loadPeriod();
+    if (!flow) delete p[key];
+    else p[key] = { flow: flow, ts: Date.now() };
+    savePeriod(p);
+    render();
   }
 
   function dateKey(d) {
@@ -859,7 +958,70 @@
       </div>
     `).join("");
 
+    renderPeriod(todayKey);
     renderCalendar(data);
+  }
+
+  // ── 月經 ──
+  // 找出每次「月經開始日」（前一天沒有紀錄的月經日）
+  function periodStarts(p) {
+    const keys = Object.keys(p).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+    const starts = [];
+    for (const k of keys) {
+      const [y,m,d] = k.split("-").map(Number);
+      const prev = new Date(y, m-1, d); prev.setDate(prev.getDate() - 1);
+      if (!p[dateKey(prev)]) starts.push(k);
+    }
+    return starts;
+  }
+
+  function renderPeriod(todayKey) {
+    const p = loadPeriod();
+    const todayFlow = p[todayKey];
+
+    // 今天的快速記錄區
+    const box = document.getElementById("periodToday");
+    if (todayFlow) {
+      box.innerHTML = `
+        <div class="period-on">
+          <span class="period-on-text">今天月經：${FLOW_INFO[todayFlow.flow].emoji} ${FLOW_INFO[todayFlow.flow].name}</span>
+          <button class="period-cancel" onclick="setPeriod('${todayKey}', null)">取消</button>
+        </div>`;
+    } else {
+      box.innerHTML = `
+        <div class="flow-label">今天月經來了嗎？點一下記錄量：</div>
+        <div class="flow-grid">
+          ${Object.keys(FLOW_INFO).map(f => `
+            <button class="flow-option" onclick="setPeriod('${todayKey}', '${f}')">
+              <span class="flow-emoji">${FLOW_INFO[f].emoji}</span>
+              <span class="flow-name">${FLOW_INFO[f].name}</span>
+            </button>`).join("")}
+        </div>`;
+    }
+
+    // 統計：距離上次、平均週期、預計下次
+    const stats = document.getElementById("periodStats");
+    const starts = periodStarts(p);
+    if (!starts.length) {
+      stats.innerHTML = "還沒有月經紀錄。每次經期第一天記錄一下，就能幫你算週期囉。";
+      return;
+    }
+    const lastStart = starts[starts.length - 1];
+    const sinceDays = daysBetweenKeys(lastStart, todayKey);
+    let line = "上次月經開始：<b>" + (sinceDays <= 0 ? "今天" : sinceDays + " 天前") + "</b>（" + lastStart.slice(5).replace("-","/") + "）";
+
+    if (starts.length >= 2) {
+      let sum = 0;
+      for (let i = 1; i < starts.length; i++) sum += daysBetweenKeys(starts[i-1], starts[i]);
+      const avg = Math.round(sum / (starts.length - 1));
+      // 預計下次 = 上次開始 + 平均週期
+      const [ly,lm,ld] = lastStart.split("-").map(Number);
+      const next = new Date(ly, lm-1, ld); next.setDate(next.getDate() + avg);
+      line += "<br>平均週期：<b>約 " + avg + " 天</b> ・ 預計下次：<b>" + (next.getMonth()+1) + "/" + next.getDate() + "</b>";
+    } else {
+      line += "<br>再記錄一次經期，就能估算你的平均週期。";
+    }
+    stats.innerHTML = line;
   }
 
   function renderCalendar(data) {
@@ -870,6 +1032,7 @@
     const firstDay = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
     const todayKey = dateKey(new Date());
+    const period = loadPeriod();
 
     let html = ["日","一","二","三","四","五","六"].map(d => `<div class="cal-day-name">${d}</div>`).join("");
 
@@ -879,15 +1042,17 @@
       const key = viewYear + "-" + String(viewMonth+1).padStart(2,"0") + "-" + String(d).padStart(2,"0");
       const recs = data[key];
       const isToday = key === todayKey;
+      const periodDot = period[key] ? `<span class="cell-period">🩸</span>` : "";
       if (recs && recs.length) {
         // 用當天最後一筆的表情
         const lastType = recs[recs.length-1].type;
         html += `<div class="cal-cell clickable has-record ${isToday?'today':''}" onclick="openDayModal('${key}')">
+          ${periodDot}
           <span class="cell-emoji">${TYPE_INFO[lastType].emoji}</span>
           <span class="cell-num">${d}</span>
         </div>`;
       } else {
-        html += `<div class="cal-cell clickable ${isToday?'today':''}" onclick="openDayModal('${key}')"><span class="cell-num">${d}</span></div>`;
+        html += `<div class="cal-cell clickable ${isToday?'today':''}" onclick="openDayModal('${key}')">${periodDot}<span class="cell-num">${d}</span></div>`;
       }
     }
 
@@ -994,6 +1159,35 @@
         <button class="record-del" onclick="deleteRecord('${modalKey}', ${r.ts})">✕</button>
       </div>
     `).join("");
+
+    // 這天的月經紀錄
+    const p = loadPeriod();
+    const dayFlow = p[modalKey];
+    const mp = document.getElementById("modalPeriod");
+    if (dayFlow) {
+      mp.innerHTML = `
+        <div class="period-on">
+          <span class="period-on-text">這天月經：${FLOW_INFO[dayFlow.flow].emoji} ${FLOW_INFO[dayFlow.flow].name}</span>
+          <button class="period-cancel" onclick="modalSetPeriod(null)">取消</button>
+        </div>`;
+    } else {
+      mp.innerHTML = `
+        <div class="flow-label">🩸 這天月經來了嗎？</div>
+        <div class="flow-grid">
+          ${Object.keys(FLOW_INFO).map(f => `
+            <button class="flow-option" onclick="modalSetPeriod('${f}')">
+              <span class="flow-emoji">${FLOW_INFO[f].emoji}</span>
+              <span class="flow-name">${FLOW_INFO[f].name}</span>
+            </button>`).join("")}
+        </div>`;
+    }
+  }
+
+  function modalSetPeriod(flow) {
+    if (!modalKey) return;
+    setPeriod(modalKey, flow);   // 內含 render()
+    renderModal();
+    showToast(flow ? "已記錄月經 🩸" : "已取消月經紀錄");
   }
 
   function toggleGuide() {
@@ -1080,12 +1274,14 @@
 
   // ── 備份 / 還原（匯出成檔案，可換手機後還原）──
   function exportBackup() {
-    const data = loadData();
-    if (Object.keys(data).length === 0) {
+    const poop = loadData();
+    const period = loadPeriod();
+    if (Object.keys(poop).length === 0 && Object.keys(period).length === 0) {
       showToast("還沒有任何紀錄可以備份 😅");
       return;
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const payload = { _type: "poopDiary", _v: 2, poop: poop, period: period };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -1116,13 +1312,23 @@
       }
       if (!confirm("要還原這個備份嗎？\n會與目前的紀錄合併（不會刪掉你現有的紀錄）")) return;
 
+      // 新版備份含 poop / period 兩塊；舊版備份整包就是便便資料
+      let poopIn, periodIn;
+      if (incoming.poop && typeof incoming.poop === "object" && !Array.isArray(incoming.poop)) {
+        poopIn = incoming.poop;
+        periodIn = (incoming.period && typeof incoming.period === "object") ? incoming.period : {};
+      } else {
+        poopIn = incoming;
+        periodIn = {};
+      }
+
       const data = loadData();
       let added = 0;
-      for (const k in incoming) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !Array.isArray(incoming[k])) continue;
+      for (const k in poopIn) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || !Array.isArray(poopIn[k])) continue;
         if (!data[k]) data[k] = [];
         const existingTs = new Set(data[k].map(r => r.ts));
-        for (const r of incoming[k]) {
+        for (const r of poopIn[k]) {
           if (!r || !TYPE_INFO[r.type]) continue;          // 過濾無效資料
           const ts = typeof r.ts === "number" ? r.ts : (Date.now() + Math.floor(Math.random() * 1e6));
           if (!existingTs.has(ts)) {
@@ -1137,8 +1343,23 @@
         if (!data[k].length) delete data[k];
       }
       saveData(data);
+
+      // 月經資料
+      const period = loadPeriod();
+      let pAdded = 0;
+      for (const k in periodIn) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+        const v = periodIn[k];
+        if (!v || !FLOW_INFO[v.flow]) continue;
+        if (!period[k]) {
+          period[k] = { flow: v.flow, ts: typeof v.ts === "number" ? v.ts : Date.now() };
+          pAdded++;
+        }
+      }
+      savePeriod(period);
+
       render();
-      showToast("已還原 " + added + " 筆紀錄 💕");
+      showToast("已還原 " + added + " 筆便便、" + pAdded + " 天月經 💕");
     };
     reader.readAsText(file);
   }
