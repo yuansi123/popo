@@ -236,6 +236,23 @@
   .confirm-btn:disabled { opacity: 0.4; }
   .confirm-btn:active:not(:disabled) { transform: scale(0.97); }
 
+  /* NOTE INPUT */
+  .note-input {
+    width: 100%;
+    margin-top: 12px;
+    background: var(--bg);
+    border: 2px solid var(--cream);
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-size: 13px;
+    color: var(--dark);
+    font-family: inherit;
+    line-height: 1.5;
+    resize: none;
+  }
+  .note-input:focus { outline: none; border-color: var(--peach); }
+  .note-input::placeholder { color: var(--mut); }
+
   /* TODAY RECORDS */
   .today-records { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 
@@ -253,6 +270,7 @@
   .record-info { flex: 1; }
   .record-type { font-size: 13px; font-weight: 700; color: var(--dark); }
   .record-time { font-size: 11px; color: var(--mut); }
+  .record-note { font-size: 11px; color: var(--brown); margin-top: 3px; word-break: break-word; line-height: 1.4; }
 
   .record-del {
     background: none;
@@ -560,6 +578,7 @@
           <span class="type-name">嚴重便秘</span>
         </button>
       </div>
+      <textarea class="note-input" id="noteInput" rows="1" placeholder="備註（選填，例如：吃了麻辣鍋、肚子痛）"></textarea>
       <button class="confirm-btn" id="confirmBtn" onclick="saveRecord()" disabled>紀錄下來！</button>
     </div>
 
@@ -641,6 +660,7 @@
           <span class="type-emoji">😖</span><span class="type-name">嚴重便秘</span>
         </button>
       </div>
+      <textarea class="note-input" id="modalNoteInput" rows="1" placeholder="備註（選填，例如：吃了麻辣鍋、肚子痛）"></textarea>
       <button class="confirm-btn" id="modalConfirmBtn" onclick="modalSave()" disabled>新增這筆紀錄</button>
       <button class="nopoop-btn" id="modalNoPoopBtn" onclick="modalNoPoop()">🚫 這天沒大便</button>
     </div>
@@ -689,6 +709,11 @@
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   }
 
+  // 備註是使用者輸入，渲染前先跳脫，避免破版或注入
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+
   // ── UI ──
   function togglePicker() {
     const p = document.getElementById("typePicker");
@@ -696,7 +721,7 @@
   }
 
   function selectType(el) {
-    document.querySelectorAll(".type-option").forEach(o => o.classList.remove("selected"));
+    document.querySelectorAll("#typePicker .type-option").forEach(o => o.classList.remove("selected"));
     el.classList.add("selected");
     selectedType = el.dataset.type;
     document.getElementById("confirmBtn").disabled = false;
@@ -708,16 +733,20 @@
     const key = dateKey(new Date());
     if (!data[key]) data[key] = [];
     const now = new Date();
-    data[key].push({
+    const note = document.getElementById("noteInput").value.trim();
+    const rec = {
       type: selectedType,
       time: String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0"),
       ts: Date.now(),
-    });
+    };
+    if (note) rec.note = note;
+    data[key].push(rec);
     saveData(data);
 
     // reset UI
     selectedType = null;
-    document.querySelectorAll(".type-option").forEach(o => o.classList.remove("selected"));
+    document.getElementById("noteInput").value = "";
+    document.querySelectorAll("#typePicker .type-option").forEach(o => o.classList.remove("selected"));
     document.getElementById("confirmBtn").disabled = true;
     document.getElementById("typePicker").classList.remove("show");
 
@@ -824,6 +853,7 @@
         <div class="record-info">
           <div class="record-type">${TYPE_INFO[r.type].name}</div>
           <div class="record-time">${r.time}</div>
+          ${r.note ? `<div class="record-note">📝 ${esc(r.note)}</div>` : ""}
         </div>
         <button class="record-del" onclick="deleteRecord('${todayKey}', ${r.ts})">✕</button>
       </div>
@@ -882,6 +912,7 @@
     modalKey = key;
     modalSelectedType = null;
     document.getElementById("modalDate").textContent = prettyDate(key);
+    document.getElementById("modalNoteInput").value = "";
     renderModal();
     document.getElementById("dayModal").classList.add("show");
   }
@@ -906,13 +937,17 @@
     // 若這天原本標記「沒大便」，新增真實紀錄時移除該標記
     data[modalKey] = data[modalKey].filter(r => r.type !== "none");
     const now = new Date();
-    data[modalKey].push({
+    const note = document.getElementById("modalNoteInput").value.trim();
+    const rec = {
       type: modalSelectedType,
       time: String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0"),
       ts: Date.now(),
-    });
+    };
+    if (note) rec.note = note;
+    data[modalKey].push(rec);
     saveData(data);
     modalSelectedType = null;
+    document.getElementById("modalNoteInput").value = "";
     showToast("已新增這天的紀錄 💩");
     burstConfetti();
     render();
@@ -950,6 +985,7 @@
         <div class="record-info">
           <div class="record-type">${TYPE_INFO[r.type].name}</div>
           <div class="record-time">${r.time}</div>
+          ${r.note ? `<div class="record-note">📝 ${esc(r.note)}</div>` : ""}
         </div>
         <button class="record-del" onclick="deleteRecord('${modalKey}', ${r.ts})">✕</button>
       </div>
@@ -1086,7 +1122,9 @@
           if (!r || !TYPE_INFO[r.type]) continue;          // 過濾無效資料
           const ts = typeof r.ts === "number" ? r.ts : (Date.now() + Math.floor(Math.random() * 1e6));
           if (!existingTs.has(ts)) {
-            data[k].push({ type: r.type, time: typeof r.time === "string" ? r.time : "", ts });
+            const rec = { type: r.type, time: typeof r.time === "string" ? r.time : "", ts };
+            if (typeof r.note === "string" && r.note) rec.note = r.note;
+            data[k].push(rec);
             existingTs.add(ts);
             added++;
           }
