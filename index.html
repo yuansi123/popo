@@ -1202,6 +1202,50 @@
     return Math.round((new Date(by,bm-1,bd) - new Date(ay,am-1,ad)) / 86400000);
   }
 
+  // 判斷今天落在生理週期哪個階段（給男友看的評語）
+  function getCyclePhase() {
+    const p = loadPeriod();
+    const todayKey = dateKey(new Date());
+    const allStarts = periodStarts(p);
+    const starts = allStarts.filter(s => s <= todayKey);
+    if (!starts.length) return null;
+    const lastStart = starts[starts.length - 1];
+
+    // 平均週期（不足兩次就用 28 天估）
+    let avgCycle = 28;
+    if (allStarts.length >= 2) {
+      let sum = 0;
+      for (let i = 1; i < allStarts.length; i++) sum += daysBetweenKeys(allStarts[i-1], allStarts[i]);
+      avgCycle = Math.round(sum / (allStarts.length - 1));
+    }
+    if (avgCycle < 21 || avgCycle > 40) avgCycle = 28;   // 防呆
+
+    // 這次經期長度（從 lastStart 起連續有紀錄的天數）
+    let periodLen = 0;
+    const [ly,lm,ld] = lastStart.split("-").map(Number);
+    const cur = new Date(ly, lm-1, ld);
+    while (p[dateKey(cur)]) { periodLen++; cur.setDate(cur.getDate() + 1); }
+    if (periodLen < 1) periodLen = 4;
+
+    const cycleDay = daysBetweenKeys(lastStart, todayKey) + 1;   // 週期第幾天
+    const ovDay = Math.max(periodLen + 1, avgCycle - 14);        // 排卵日約在週期第幾天
+    const isPeriodToday = !!p[todayKey];
+
+    let name, note;
+    if (isPeriodToday || cycleDay <= periodLen) {
+      name = "月經期"; note = "正在生理期，容易累、想吃甜的，多體諒、幫她保暖 🩸";
+    } else if (cycleDay > avgCycle + 2) {
+      name = "黃體期後段（月經延遲）"; note = "比預計日子晚了，留意一下狀況、別給太大壓力 🫶";
+    } else if (cycleDay >= ovDay - 2 && cycleDay <= ovDay + 1) {
+      name = "排卵期"; note = "接近排卵、屬於易孕期，要注意喔 🥚";
+    } else if (cycleDay < ovDay - 2) {
+      name = "濾泡期"; note = "經期剛過、精神和心情通常比較好的時候 🌱";
+    } else {
+      name = "黃體期"; note = "排卵後到下次月經前，可能有經前症候群(情緒起伏、食慾大)，多包容她 💛";
+    }
+    return { name, note, cycleDay, avgCycle };
+  }
+
   function buildSummaryText() {
     const data = loadData();
     const today = new Date();
@@ -1249,12 +1293,22 @@
         "・狀態：" + verdict;
     }
 
+    // 生理週期階段（有月經紀錄才附上）
+    const phase = getCyclePhase();
+    let cycleBlock = "";
+    if (phase) {
+      cycleBlock = "\n\n🌸 生理週期\n" +
+        "・目前：週期第 " + phase.cycleDay + " 天，" + phase.name + "\n" +
+        "・" + phase.note;
+    }
+
     const wd = ["日","一","二","三","四","五","六"][today.getDay()];
     return "💩 我的便便日記回報 💩\n" +
       "📅 " + (today.getMonth()+1) + "/" + today.getDate() + "（" + wd + "）\n\n" +
       "⏰ " + sinceLine + "\n" +
       "🔥 連續紀錄：" + calcStreak(data) + " 天\n\n" +
-      "📊 最近兩週\n" + statLines;
+      "📊 最近兩週\n" + statLines +
+      cycleBlock;
   }
 
   async function shareToPartner() {
